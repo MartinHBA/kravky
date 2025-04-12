@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
+	"golang.org/x/net/html/charset"
 )
 
 func main() {
@@ -28,7 +29,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create login request: %v", err)
 	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36")
 
 	// Send the login request
@@ -54,17 +55,20 @@ func main() {
 	}
 	defer resp.Body.Close()
 
-	// Read the raw response body
-	log.Println("Reading raw response body...")
-	body, err := ioutil.ReadAll(resp.Body)
+	// Convert response body to UTF-8
+	log.Println("Converting response body to UTF-8...")
+	r, err := charset.NewReader(resp.Body, resp.Header.Get("Content-Type"))
 	if err != nil {
-		log.Fatalf("Failed to read response body: %v", err)
+		log.Fatalf("Failed to create charset reader: %v", err)
 	}
-	log.Printf("Raw response body:\n%s\n", string(body))
+	utf8Body, err := ioutil.ReadAll(r)
+	if err != nil {
+		log.Fatalf("Failed to read UTF-8 response body: %v", err)
+	}
 
 	// Parse the HTML response
 	log.Println("Parsing the HTML response...")
-	doc, err := goquery.NewDocumentFromReader(strings.NewReader(string(body)))
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(string(utf8Body)))
 	if err != nil {
 		log.Fatalf("Failed to parse HTML: %v", err)
 	}
