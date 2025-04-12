@@ -2,17 +2,50 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/http/cookiejar"
 	"strings"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"golang.org/x/net/html/charset"
 )
 
 func main() {
+	http.HandleFunc("/fetch-data", fetchDataHandler)
+
+	// Start the HTTP server
+	log.Println("Starting server on :8080...")
+	if err := http.ListenAndServe(":8080", nil); err != nil {
+		log.Fatalf("Failed to start server: %v", err)
+	}
+}
+
+// Handler for the /fetch-data endpoint
+func fetchDataHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method. Only POST is allowed.", http.StatusMethodNotAllowed)
+		return
+	}
+
+	log.Println("Received request to fetch data...")
+	err := fetchData()
+	if err != nil {
+		log.Printf("Error fetching data: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(Response{Message: "Failed to fetch data"})
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(Response{Message: "Data fetched successfully"})
+}
+
+// Function to fetch data
+func fetchData() error {
 	// Create an HTTP client with cookie jar
 	jar, err := cookiejar.New(nil)
 	if err != nil {
@@ -73,15 +106,22 @@ func main() {
 		log.Fatalf("Failed to parse HTML: %v", err)
 	}
 
-	// Extract key-value pairs
-	log.Println("Extracting key-value pairs...")
+	// Extract key-value pairs with timestamp
+	log.Println("Extracting key-value pairs with timestamp...")
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
 	doc.Find("table.form_tab tr").Each(func(i int, s *goquery.Selection) {
 		label := s.Find("label").Text()
 		value := s.Find("td.text_CehzSumm_Count").Text()
 		if label != "" && value != "" {
-			log.Printf("Extracted: %s -> %s\n", label, value)
+			log.Printf("%s | Extracted: %s -> %s\n", timestamp, label, value)
 		}
 	})
 
-	log.Println("Program finished successfully.")
+	log.Println("Data fetching completed successfully.")
+	return nil
+}
+
+// Response structure for API responses
+type Response struct {
+	Message string `json:"message"`
 }
