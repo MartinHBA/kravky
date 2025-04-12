@@ -2,14 +2,19 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/http/cookiejar"
+	"os"
 	"strings"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	"github.com/Azure/azure-sdk-for-go/sdk/data/aztables"
 	"github.com/PuerkitoBio/goquery"
 	"golang.org/x/net/html/charset"
 )
@@ -36,7 +41,52 @@ type DataEntry struct {
 	Value     string `json:"value"`
 }
 
-// Updated fetchDataHandler to return JSON response
+// Function to upload data to Azure Table Storage
+func uploadToAzureTable(data []DataEntry) error {
+	// Get Azure Storage account details from environment variables
+	accountName := os.Getenv("AZURE_STORAGE_ACCOUNT")
+	accountKey := os.Getenv("AZURE_STORAGE_KEY")
+	tableName := os.Getenv("AZURE_TABLE_NAME")
+
+	if accountName == "" || accountKey == "" || tableName == "" {
+		return fmt.Errorf("Azure Storage account details or table name are not set in environment variables")
+	}
+
+	// Create a service client
+	cred, err := aztables.NewSharedKeyCredential(accountName, accountKey)
+	if err != nil {
+		return fmt.Errorf("failed to create Azure credential: %v", err)
+	}
+
+	serviceClient, err := aztables.NewServiceClientWithSharedKey(fmt.Sprintf("https://%s.table.core.windows.net", accountName), cred, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create Azure Table service client: %v", err)
+	}
+
+	// Get a client for the table
+	tableClient := serviceClient.NewClient(tableName)
+
+	// Insert data into the table
+	for _, entry := range data {
+		entity := map[string]interface{}{
+			"PartitionKey": to.Ptr("DataPartition"),
+			"RowKey":       to.Ptr(fmt.Sprintf("%s-%s", entry.Timestamp, entry.Label)),
+			"Timestamp":    to.Ptr(entry.Timestamp),
+			"Label":        to.Ptr(entry.Label),
+			"Value":        to.Ptr(entry.Value),
+		}
+
+		_, err := tableClient.AddEntity(context.Background(), entity, nil)
+		if err != nil {
+			log.Printf("Failed to insert entity: %v", err)
+		}
+	}
+
+	log.Println("Data successfully uploaded to Azure Table Storage.")
+	return nil
+}
+
+// Updated fetchDataHandler to upload data to Azure Table Storage
 func fetchDataHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method. Only POST is allowed.", http.StatusMethodNotAllowed)
@@ -52,8 +102,17 @@ func fetchDataHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Upload data to Azure Table Storage
+	err = uploadToAzureTable(data)
+	if err != nil {
+		log.Printf("Error uploading data to Azure Table Storage: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(Response{Message: "Failed to upload data to Azure Table Storage"})
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(data)
+	json.NewEncoder(w).Encode(Response{Message: "Data fetched and uploaded successfully"})
 }
 
 // Updated fetchData function to return JSON response
