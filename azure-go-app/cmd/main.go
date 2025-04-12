@@ -44,9 +44,9 @@ type DataEntry struct {
 // Function to upload data to Azure Table Storage
 func uploadToAzureTable(data []DataEntry) error {
 	// Get Azure Storage account details from environment variables
-	accountName := os.Getenv("AZURE_STORAGE_ACCOUNT")
+	accountName := "kravkysa"
 	accountKey := os.Getenv("AZURE_STORAGE_KEY")
-	tableName := os.Getenv("AZURE_TABLE_NAME")
+	tableName := "kravkytable"
 
 	if accountName == "" || accountKey == "" || tableName == "" {
 		return fmt.Errorf("Azure Storage account details or table name are not set in environment variables")
