@@ -76,7 +76,15 @@ func uploadToAzureTable(data []DataEntry) error {
 			"Value":        to.Ptr(entry.Value),
 		}
 
-		_, err := tableClient.AddEntity(context.Background(), entity, nil)
+		// Serialize the entity to JSON
+		entityJSON, err := json.Marshal(entity)
+		if err != nil {
+			log.Printf("Failed to serialize entity to JSON: %v", err)
+			continue
+		}
+
+		// Add the serialized entity to the table
+		_, err = tableClient.AddEntity(context.Background(), entityJSON, nil)
 		if err != nil {
 			log.Printf("Failed to insert entity: %v", err)
 		}
