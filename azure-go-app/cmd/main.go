@@ -24,7 +24,19 @@ func main() {
 	}
 }
 
-// Handler for the /fetch-data endpoint
+// Response structure for API responses
+type Response struct {
+	Message string `json:"message"`
+}
+
+// DataEntry structure for extracted data
+type DataEntry struct {
+	Timestamp string `json:"timestamp"`
+	Label     string `json:"label"`
+	Value     string `json:"value"`
+}
+
+// Updated fetchDataHandler to return JSON response
 func fetchDataHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method. Only POST is allowed.", http.StatusMethodNotAllowed)
@@ -32,7 +44,7 @@ func fetchDataHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Println("Received request to fetch data...")
-	err := fetchData()
+	data, err := fetchData()
 	if err != nil {
 		log.Printf("Error fetching data: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -41,11 +53,11 @@ func fetchDataHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(Response{Message: "Data fetched successfully"})
+	json.NewEncoder(w).Encode(data)
 }
 
-// Function to fetch data
-func fetchData() error {
+// Updated fetchData function to return JSON response
+func fetchData() ([]DataEntry, error) {
 	// Create an HTTP client with cookie jar
 	jar, err := cookiejar.New(nil)
 	if err != nil {
@@ -109,19 +121,19 @@ func fetchData() error {
 	// Extract key-value pairs with timestamp
 	log.Println("Extracting key-value pairs with timestamp...")
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	var data []DataEntry
 	doc.Find("table.form_tab tr").Each(func(i int, s *goquery.Selection) {
 		label := s.Find("label").Text()
 		value := s.Find("td.text_CehzSumm_Count").Text()
 		if label != "" && value != "" {
-			log.Printf("%s | Extracted: %s -> %s\n", timestamp, label, value)
+			data = append(data, DataEntry{
+				Timestamp: timestamp,
+				Label:     label,
+				Value:     value,
+			})
 		}
 	})
 
 	log.Println("Data fetching completed successfully.")
-	return nil
-}
-
-// Response structure for API responses
-type Response struct {
-	Message string `json:"message"`
+	return data, nil
 }
